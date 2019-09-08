@@ -3,7 +3,7 @@
 A tool for stashing and indexing memes.
 
 ## Prerequisites
-Python 3.7
+Python 3.7  
 Google Vision API Python library (google-cloud-vision)
 
 
