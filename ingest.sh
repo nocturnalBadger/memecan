@@ -10,7 +10,7 @@ mkdir -p $IMAGES_FOLDER
 cat schema.sql | sqlite3 $DB_FILE
 
 for extension in .png .PNG .jpg .JPG .jpeg .JPEG; do
-    cp -v "$INPUT_FOLDER"/**/*$extension "$IMAGES_FOLDER"
+    cp -v "$INPUT_FOLDER"/*$extension "$INPUT_FOLDER"/**/*$extension "$IMAGES_FOLDER"
 done;
 
 for f in "$IMAGES_FOLDER"/*; do
@@ -21,6 +21,7 @@ for f in "$IMAGES_FOLDER"/*; do
     newFilename="$IMAGES_FOLDER"/$fileHash.$newExt
     mv -v "$f" $newFilename
 
-    insertQuery="INSERT INTO $DB_TABLE (hash, file_path) VALUES ('$fileHash', '$newFilename')"
+    insertQuery="INSERT INTO $DB_TABLE (hash, file_path) VALUES ('$fileHash', '$newFilename')
+                 ON CONFLICT DO NOTHING"
     sqlite3 $DB_FILE "$insertQuery"
 done;

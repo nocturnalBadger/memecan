@@ -53,7 +53,7 @@ def get_all_image_text():
             cursor.execute("INSERT INTO Text (image, text) VALUES (?, ?)", (image_hash, image_text))
             conn.commit()
         else:
-            logger.debug(f"Found existing text for {image_file}")
+            logger.debug(f"Found existing text entry for {image_file}")
 
     conn.close()
 

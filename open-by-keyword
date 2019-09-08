@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+files=$(sqlite3 memes.db "select Images.file_path from Text JOIN Images ON Text.image = Images.hash where text LIKE '%$1%'")
+
+for file in $files; do
+    echo $file
+    xdg-open $file
+done
