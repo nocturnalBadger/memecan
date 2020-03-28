@@ -1,29 +1,35 @@
 package main
 
 import (
+	"crypto/md5"
+	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/minio/minio-go/v6"
+	"io"
 	"log"
 	"net/http"
-	"io"
-	"fmt"
-	"crypto/md5"
-//	"bytes"
+	//	"bytes"
 	"strings"
-//	"os"
-	"github.com/oklog/ulid"
-	"time"
-	"math/rand"
+	//	"os"
+	"context"
+	"encoding/json"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/postgres"
+	"github.com/oklog/ulid"
+	"math/rand"
+	"time"
 )
 
 // Image an image
 type Image struct {
-	ID         string  `sql: "type:ulid;primary_key;default:getULID()"`
-	Bucket     string
-	ObjectName string
+	ID         string `json:"id"`
+	Bucket     string `json:"bucket"`
+	ObjectName string `json:"object_name"`
 }
+
+type key int
+const imageKey key = iota
+
 
 // BeforeCreate Run before creating Image
 func (base *Image) BeforeCreate(scope *gorm.Scope) error {
@@ -31,13 +37,16 @@ func (base *Image) BeforeCreate(scope *gorm.Scope) error {
 	return scope.SetColumn("ID", ulid)
 }
 
+var db *gorm.DB
+var minioClient *minio.Client
 
 func main() {
 	log.Println("Starting memecan server")
 	r := chi.NewRouter()
-	minioClient := initMinio()
+	minioClient = initMinio()
 
-	db, err := gorm.Open("postgres", "host=localhost port=5432 user=postgres dbname=memecan sslmode=disable")
+	var err error
+	db, err = gorm.Open("postgres", "host=localhost port=5432 user=postgres dbname=memecan sslmode=disable")
 	if err != nil {
 		panic(err)
 	}
@@ -45,8 +54,14 @@ func main() {
 	db.AutoMigrate(&Image{})
 	log.Println("Database ready.")
 
-	r.Post("/images", func(w http.ResponseWriter, r *http.Request) {
-		uploadImage(w, r, minioClient, db)
+	r.Route("/images", func(r chi.Router) {
+		r.Get("/", listImages)
+		r.Post("/", uploadImage)
+
+		r.Route("/{imageID}", func(r chi.Router) {
+			r.Use(imageCtx)
+			r.Get("/", getImage)
+		})
 	})
 
 	http.ListenAndServe(":3000", r)
@@ -78,13 +93,13 @@ func initMinio() *minio.Client {
 }
 
 func getULID() string {
-	t := time.Unix(1000000, 0)
-	entropy := ulid.Monotonic(rand.New(rand.NewSource(t.UnixNano())), 0)
+	t := time.Now().UTC()
+	entropy := rand.New(rand.NewSource(t.UnixNano()))
 
 	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
 }
 
-func uploadImage(w http.ResponseWriter, r *http.Request, minioClient *minio.Client, db *gorm.DB) {
+func uploadImage(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(32 << 20) // limit your max input length!
 
 	// in your case file would be fileupload
@@ -113,9 +128,66 @@ func uploadImage(w http.ResponseWriter, r *http.Request, minioClient *minio.Clie
 	bucketName := "images"
 	minioClient.PutObject(bucketName, objectName, file, -1, minio.PutObjectOptions{})
 
-	db.Create(&Image{Bucket: bucketName, ObjectName: objectName})
+	image := Image{Bucket: bucketName, ObjectName: objectName}
+	db.Create(&image)
 
-	fmt.Fprintf(w, "ok")
-	// etc write header
+	log.Printf("Created Image record %v\n", image)
+
+	jsonImage, err := json.Marshal(image)
+	if err != nil {
+		panic(err)
+	}
+
+	w.Write(jsonImage)
+
 	return
+}
+
+func imageCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		imageID := chi.URLParam(r, "imageID")
+		fmt.Println("yo")
+		log.Printf("Request for image %s", imageID)
+
+		var image Image
+		result := db.Where("id = ?", imageID).First(&image)
+		log.Printf("Retrieved image %v", image)
+
+		if result.RowsAffected == 0 {
+			http.Error(w, http.StatusText(404), 404)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), imageKey, &image)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func getImage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	image, ok := ctx.Value(imageKey).(*Image)
+	if !ok {
+		http.Error(w, http.StatusText(422), 422)
+		return
+	}
+
+	jsonImage, err := json.Marshal(image)
+	if err != nil {
+		panic(err)
+	}
+
+	w.Write(jsonImage)
+	w.Write([]byte("\n"))
+}
+
+func listImages(w http.ResponseWriter, r *http.Request) {
+	var images []Image
+	if result := db.Find(&images); result.Error != nil {
+		http.Error(w, http.StatusText(500), 500)
+		return
+	}
+	jsonValue, _ := json.Marshal(images)
+
+	w.Write(jsonValue)
+	w.Write([]byte("\n"))
 }
