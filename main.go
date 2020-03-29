@@ -18,13 +18,80 @@ import (
 	"github.com/oklog/ulid"
 	"math/rand"
 	"time"
+	"io/ioutil"
+	"errors"
 )
 
 // Image an image
 type Image struct {
-	ID         string `json:"id"`
+	ID         string `json:"id" gorm:"primary_key"`
 	Bucket     string `json:"bucket"`
 	ObjectName string `json:"object_name"`
+}
+
+// Tag tag
+type Tag struct {
+	Text string
+}
+
+// Meme a meme
+type Meme struct {
+	ID    string `json:"id" gorm:"primary_key"`
+	Image Image  `gorm:"foreignkey:ID" json:"-"`
+	Text  string `json:"text,omitempty"`
+	Tags  []Tag  `gorm:"foreignkey:string" json:"-"`
+}
+
+type MemeAlias Meme
+type MemeForm struct {
+	MemeAlias
+	Image  string   `json:"image_id"`
+	Tags   []string `json:"tags"`
+}
+
+
+func (m Meme) MarshalJSON() ([]byte, error) {
+	// Alias used to bring all of Meme's existing fields over
+	tagNames := []string{}
+	for _, tag := range m.Tags {
+		tagNames = append(tagNames, tag.Text)
+	}
+
+	return json.Marshal(MemeForm{
+		MemeAlias: MemeAlias(m),
+		Image: m.Image.ID,
+		Tags: tagNames,
+	})
+}
+
+
+func (m *Meme) UnmarshalJSON(data []byte) error {
+
+	var form MemeForm
+	if err := json.Unmarshal(data, &form); err != nil {
+		return err
+	}
+
+	result := db.Where("id = ?", form.Image).First(&m.Image)
+	if result.Error != nil {
+		return errors.New("Image not found")
+	}
+
+
+	for _, tagStr := range form.Tags {
+		var tag Tag
+		db.FirstOrCreate(&tag, Tag{Text: tagStr})
+		m.Tags = append(m.Tags, tag)
+	}
+
+	return nil
+}
+
+
+type memeRequest struct {
+	ImageID string   `json:"image_id"`
+	Text    string   `json:"text"`
+	Tags    []string `json:"tags"`
 }
 
 type key int
@@ -33,6 +100,12 @@ const imageKey key = iota
 
 // BeforeCreate Run before creating Image
 func (base *Image) BeforeCreate(scope *gorm.Scope) error {
+	ulid := getULID()
+	return scope.SetColumn("ID", ulid)
+}
+
+// BeforeCreate Run before creating Image
+func (base *Meme) BeforeCreate(scope *gorm.Scope) error {
 	ulid := getULID()
 	return scope.SetColumn("ID", ulid)
 }
@@ -52,6 +125,8 @@ func main() {
 	}
 	defer db.Close()
 	db.AutoMigrate(&Image{})
+	db.AutoMigrate(&Tag{})
+	db.AutoMigrate(&Meme{})
 	log.Println("Database ready.")
 
 	r.Route("/images", func(r chi.Router) {
@@ -63,6 +138,8 @@ func main() {
 			r.Get("/", getImage)
 		})
 	})
+
+	r.Post("/memes", createMeme)
 
 	http.ListenAndServe(":3000", r)
 }
@@ -171,13 +248,12 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonImage, err := json.Marshal(image)
+	object, err := minioClient.GetObject(image.Bucket, image.ObjectName, minio.GetObjectOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	w.Write(jsonImage)
-	w.Write([]byte("\n"))
+	io.Copy(w, object)
 }
 
 func listImages(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +263,26 @@ func listImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonValue, _ := json.Marshal(images)
+
+	w.Write(jsonValue)
+	w.Write([]byte("\n"))
+}
+
+func createMeme(w http.ResponseWriter, r *http.Request) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		panic(err)
+	}
+	var meme Meme
+	err = json.Unmarshal(body, &meme)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("%v", err), 400)
+		return
+	}
+	log.Printf("Unmarshalled meme: %v", meme)
+
+	db.Create(&meme)
+	jsonValue, _ := json.Marshal(meme)
 
 	w.Write(jsonValue)
 	w.Write([]byte("\n"))
