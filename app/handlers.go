@@ -22,6 +22,7 @@ func Routes() *chi.Mux {
 	router.Route("/memes", func (r chi.Router) {
 		r.Post("/", createMeme)
 		r.Get("/{memeID}", getMeme)
+		r.Get("/", listMemes)
 	})
 
 	router.Route("/images", func (r chi.Router) {
@@ -89,8 +90,17 @@ func createMeme(w http.ResponseWriter, r *http.Request) {
 }
 
 
-func listMemes() {
+func listMemes(w http.ResponseWriter, r *http.Request) {
 
+	hits := connectors.Search("", 8)
+
+	jsonData, err := json.MarshalIndent(hits, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonData)
 }
 
 

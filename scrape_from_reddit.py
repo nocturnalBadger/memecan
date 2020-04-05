@@ -28,7 +28,7 @@ def get_top_images_from_subreddit(subreddit, count=20):
             b64_image = base64.b64encode(r.content)
 
             body = {
-                "tags": ["reddit", "me_irl"],
+                "tags": ["reddit", subreddit],
                 "image": {
                     "base64": b64_image.decode(),
                     "filename": image_name
@@ -38,4 +38,4 @@ def get_top_images_from_subreddit(subreddit, count=20):
             response = requests.post("http://localhost:3000/memes", json=body)
 
 
-get_top_images_from_subreddit("me_irl", count=10)
+get_top_images_from_subreddit("dankmemes", count=10)
