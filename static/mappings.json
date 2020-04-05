@@ -1,0 +1,22 @@
+{
+  "mappings": {
+    "properties": {
+      "text": {
+        "type": "text"
+      },
+      "tags": {
+        "type": "keyword"
+      },
+      "image": {
+        "properties": {
+          "bucket_name": {
+            "type": "keyword"
+          },
+          "filename": {
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  }
+}
