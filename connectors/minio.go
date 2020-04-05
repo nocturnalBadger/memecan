@@ -36,3 +36,12 @@ func InitMinio() {
 func SaveImage(name string, data io.Reader) (int64, error) {
 	return MinioClient.PutObject(BucketName, name, data, -1, minio.PutObjectOptions{})
 }
+
+func GetObject(name string) io.Reader {
+	object, err := MinioClient.GetObject(BucketName, name, minio.GetObjectOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	return object
+}

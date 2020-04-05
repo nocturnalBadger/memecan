@@ -14,8 +14,10 @@ require (
 	github.com/peterh/liner v1.2.0 // indirect
 	github.com/spf13/cobra v0.0.7 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stamblerre/gocode v1.0.0 // indirect
 	go.starlark.net v0.0.0-20200330013621-be5394c419b6 // indirect
 	golang.org/x/arch v0.0.0-20200312215426-ff8b605520f4 // indirect
 	golang.org/x/sys v0.0.0-20200331124033-c3d80250170d // indirect
+	golang.org/x/tools v0.0.0-20200403190813-44a64ad78b9b // indirect
 	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

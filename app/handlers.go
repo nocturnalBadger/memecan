@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"strings"
+	"io"
 
 	"github.com/go-chi/chi"
 
@@ -20,6 +21,11 @@ func Routes() *chi.Mux {
 
 	router.Route("/memes", func (r chi.Router) {
 		r.Post("/", createMeme)
+		r.Get("/{memeID}", getMeme)
+	})
+
+	router.Route("/images", func (r chi.Router) {
+		r.Get("/{memeID}", getImage)
 	})
 
 	return router
@@ -89,6 +95,36 @@ func listMemes() {
 
 
 func getMeme(w http.ResponseWriter, r *http.Request) {
+	memeID := chi.URLParam(r, "memeID")
 
+	var meme Meme
+	result := connectors.GetDoc(memeID, &meme)
 
+	if !result.Found {
+		http.Error(w, http.StatusText(404), 404)
+		return
+	}
+
+	jsonData, err := json.MarshalIndent(meme, "", "    ")
+	if err != nil {
+		panic(err)
+	}
+
+	w.Write(jsonData)
+}
+
+func getImage(w http.ResponseWriter, r *http.Request) {
+	memeID := chi.URLParam(r, "memeID")
+
+	var meme Meme
+	result := connectors.GetDoc(memeID, &meme)
+
+	if !result.Found {
+		http.Error(w, http.StatusText(404), 404)
+		return
+	}
+
+	object := connectors.GetObject(meme.Image.FileName)
+
+	io.Copy(w, object)
 }

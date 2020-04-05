@@ -35,9 +35,9 @@ const mapping = `
 }
 `
 
-type GetDocResult struct {
-	Found  bool   `json:"found"`
-	Source []byte `json:"_source"`
+type DocResponse struct {
+	Found  bool        `json:"found"`
+	Source interface{} `json:"_source"`
 }
 
 const esBaseUrl = "http://localhost:9200"
@@ -80,7 +80,7 @@ func CreateDoc(docID string, jsonData io.Reader) []byte {
 }
 
 
-func GetDoc(docID string) GetDocResult {
+func GetDoc(docID string, target interface{}) DocResponse {
 	url := fmt.Sprintf("%s/%s/_doc/%s", esBaseUrl, index, docID)
 
 	resp, err := http.Get(url)
@@ -93,7 +93,10 @@ func GetDoc(docID string) GetDocResult {
 		panic(err)
 	}
 
-	var result GetDocResult
+	result := DocResponse{
+		Found: false,
+		Source: target,
+	}
 	err = json.Unmarshal(respBytes, &result)
 	if err != nil {
 		panic(err)
